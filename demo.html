@@ -58,7 +58,16 @@
             {
               selector: 'node:parent',
               style: {
-                'label': ''
+                // Show parents nodes' label
+                'label': 'data(id)'
+              }
+            },
+
+            {
+              selector: 'node:compound',
+              style: {
+                // Show compound nodes' label
+                'label': 'data(id)'
               }
             },
 
@@ -90,18 +99,43 @@
                 'border-color': 'red',
                 'border-style': 'dashed'
               }
+            },
+
+            {
+              selector: '.cdnd-fake-parent',
+              style: {
+                'border-color': 'blue',
+                'border-style': 'dotted'
+              }
             }
           ],
 
           elements: {
             nodes: [
               { data: { id: 'a' } },
+              { data: { id: 'a1', parent: 'a' } },
+              { data: { id: 'a2', parent: 'a' } },
+              { data: { id: 'a3', parent: 'a' } },
+              { data: { id: 'a31', parent: 'a3' } },
+              { data: { id: 'a32', parent: 'a3' } },
               { data: { id: 'b' } },
               { data: { id: 'c' } },
               { data: { id: 'd', parent: 'p' } },
               { data: { id: 'p'} }
             ],
             edges: [
+            
+               {
+                 data: { id: 'ab', source: 'a', target: 'b' }
+               },
+               
+               {
+               data: { id: 'a31c', source: 'a31', target: 'c' }
+               },
+               
+               {
+               data: { id: 'a32a31', source: 'a32', target: 'a31' }
+               },
 
             ]
           }

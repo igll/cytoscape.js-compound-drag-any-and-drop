@@ -115,7 +115,8 @@ var _require = __webpack_require__(235),
     expandBounds = _require.expandBounds,
     getBoundsCopy = _require.getBoundsCopy,
     setParent = _require.setParent,
-    removeParent = _require.removeParent;
+    removeParent = _require.removeParent,
+    cursor;
 
 var addListener = function addListener(event, selector, callback) {
   this.listeners.push({
@@ -142,15 +143,15 @@ var addListeners = function addListeners() {
   };
 
   var canBeGrabbed = function canBeGrabbed(n) {
-    return !isParent(n) && !isMultiplySelected(n) && options.grabbedNode(n);
+    return !isMultiplySelected(n) && options.grabbedNode(n);
   };
 
   var canBeDropTarget = function canBeDropTarget(n) {
-    return !isChild(n) && !n.same(_this.grabbedNode) && options.dropTarget(n, _this.grabbedNode);
+    return !n.same(_this.grabbedNode) && options.dropTarget(n, _this.grabbedNode) & !n.ancestors().has(_this.grabbedNode) & !_this.grabbedNode.ancestors().has(n);
   };
 
   var canBeDropSibling = function canBeDropSibling(n) {
-    return isChild(n) && !n.same(_this.grabbedNode) && options.dropSibling(n, _this.grabbedNode);
+    return !n.same(_this.grabbedNode) && options.dropSibling(n, _this.grabbedNode) & !n.ancestors().has(_this.grabbedNode) & !_this.grabbedNode.ancestors().has(n);
   };
 
   var canPullFromParent = function canPullFromParent(n) {
@@ -158,11 +159,11 @@ var addListeners = function addListeners() {
   };
 
   var getBoundTuplesNode = function getBoundTuplesNode(n) {
-    return getBoundsTuple(n, options.boundingBoxOptions);
+    return getBoundsTuple(n, options.boundingBoxOptions, options.overThreshold);
   };
 
   var canBeInBoundsTuple = function canBeInBoundsTuple(n) {
-    return (canBeDropTarget(n) || canBeDropSibling(n)) && !n.same(_this.dropTarget);
+    return (canBeDropTarget(n) || canBeDropSibling(n)) && !n.same(_this.dropTarget) && !n.hasClass("cdnd-fake-parent");
   };
 
   var updateBoundsTuples = function updateBoundsTuples() {
@@ -196,6 +197,15 @@ var addListeners = function addListeners() {
     _this.dropTarget = cy.collection();
     _this.dropSibling = cy.collection();
 
+     grabbedParent = _this.grabbedNode.parent();
+
+     if (parentBB == null) {
+        parentBB = getBounds(grabbedParent, options.boundingBoxOptions);
+     }
+
+     presentNewSibling = null;
+     presentNewParent = null;
+     
     if (canPullFromParent(node)) {
       _this.dropTarget = node.parent();
       _this.dropTargetBounds = getBoundsCopy(_this.dropTarget, options.boundingBoxOptions);
@@ -217,7 +227,7 @@ var addListeners = function addListeners() {
     var newNode = e.target;
 
     if (canBeInBoundsTuple(newNode)) {
-      _this.boundsTuples.push(getBoundsTuple(newNode, options.boundingBoxOptions));
+      _this.boundsTuples.push(getBoundsTuple(newNode, options.boundingBoxOptions, options.overThreshold));
     }
   });
   this.addListener('remove', 'node', function (e) {
@@ -240,95 +250,264 @@ var addListeners = function addListeners() {
       }
     }
   });
-  this.addListener('drag', 'node', function () {
+  
+  var grabbedParent;
+  var parentBB;
+  var presentNewSibling;
+  var presentNewParent;
+
+  this.addListener('drag', 'node', function (e) {
     if (!_this.inGesture || !_this.enabled) {
-      return;
+        return;
     }
 
-    if (_this.dropTarget.nonempty()) {
-      // already in a parent
-      var bb = expandBounds(getBounds(_this.grabbedNode, options.boundingBoxOptions), options.outThreshold);
-      var parent = _this.dropTarget;
-      var sibling = _this.dropSibling;
-      var rmFromParent = !boundsOverlap(_this.dropTargetBounds, bb);
-      var grabbedIsOnlyChild = isOnlyChild(_this.grabbedNode);
 
-      if (rmFromParent) {
-        removeParent(_this.grabbedNode);
-        removeParent(_this.dropSibling);
 
-        _this.dropTarget.removeClass('cdnd-drop-target');
 
-        _this.dropSibling.removeClass('cdnd-drop-sibling');
 
-        var isFakeParent = _this.dropTarget && _this.dropTarget.hasClass('cdnd-new-parent');
+    var getBounds = function getBounds(n, boundingBoxOptions) {
+        return n.boundingBox(boundingBoxOptions);
+    };
 
-        if ((_this.dropSibling.nonempty() // remove extension-created parents on out
-        || grabbedIsOnlyChild) && isFakeParent // remove empty parents
-        ) {
-          _this.dropTarget.remove();
+    function pointInsideRect(p, rect) {
+        return p.x >= rect.x1 && p.x <= rect.x2 && p.y >= rect.y1 && p.y <= rect.y2;
+    }
+
+    cursor = e.target.position();
+
+
+    // 1. Check if if has been grabbed outside its parent.
+    var candidateFormerParent = null;
+
+
+    if (grabbedParent.nonempty()) {
+
+      if (!pointInsideRect(cursor, parentBB)) {
+
+        // Grabbed outside its present parent
+        candidateFormerParent = grabbedParent;
+
+        if (_this.dropTarget.nonempty()) {
+
+          // already in a parent
+          var bb = expandBounds(getBounds(_this.grabbedNode, options.boundingBoxOptions), options.outThreshold);
+          var parent = _this.dropTarget;
+          var sibling = _this.dropSibling;
+          var grabbedIsOnlyChild = isOnlyChild(_this.grabbedNode);
+
+          removeParent(_this.grabbedNode);
+          removeParent(_this.dropSibling);
+
+          _this.dropTarget.removeClass('cdnd-drop-target');
+
+          _this.dropSibling.removeClass('cdnd-drop-sibling');
+
+          var isFakeParent = _this.dropTarget && _this.dropTarget.hasClass('cdnd-fake-parent');
+
+          if ((_this.dropSibling.nonempty() // remove extension-created parents on out
+            || grabbedIsOnlyChild) && isFakeParent // remove empty parents
+          ) {
+            _this.dropTarget.remove();
+          }
+
+          _this.dropTarget = cy.collection();
+          _this.dropSibling = cy.collection();
+          _this.dropTargetBounds = null;
+
+          if (isFakeParent) {
+            updateBoundsTuples();
+          }
+
+          _this.grabbedNode.emit('cdndout', [parent, sibling]);
+
         }
-
-        _this.dropTarget = cy.collection();
-        _this.dropSibling = cy.collection();
-        _this.dropTargetBounds = null;
-
-        if (isFakeParent) {
-          updateBoundsTuples();
-        }
-
-        _this.grabbedNode.emit('cdndout', [parent, sibling]);
       }
-    } else {
-      // not in a parent
-      var _bb = expandBounds(getBounds(_this.grabbedNode, options.boundingBoxOptions), options.overThreshold);
+    }
 
-      var tupleOverlaps = function tupleOverlaps(t) {
-        return !t.node.removed() && boundsOverlap(_bb, t.bb);
-      };
 
-      var overlappingNodes = _this.boundsTuples.filter(tupleOverlaps).map(function (t) {
+    // 2. Find new situation: Maybe new parent or new sibling
+
+    var cursorInTuple = function cursorInTuple(t) {
+        return !t.node.removed() && pointInsideRect(cursor, t.bb);
+    };
+
+    var cursorBesidesTuple = function cursorBesidesTuple(t) {
+        return !t.node.removed() && pointInsideRect(cursor, t.bbb);
+    };
+
+    var possibleInTargets = _this.boundsTuples.filter(cursorInTuple).map(function (t) {
         return t.node;
+    });
+
+
+    var possibleBesidesTargets = _this.boundsTuples.filter(cursorBesidesTuple).map(function (t) {
+        return t.node;
+    });
+
+
+
+    function minDistanceToPoint(point, rect) {
+
+      const { x: px, y: py } = point;
+      const { x1, y1, x2, y2 } = rect;
+
+      // Check if point is inside the rectangle
+      if (px >= x1 && px <= x2 && py >= y1 && py <= y2) {
+        return Math.min(Math.abs(px - x1), Math.abs(px - x2), Math.abs(py - y1), Math.abs(py - y2));
+      }
+
+      // Determine the region of the point
+      const isLeft = px < x1;
+      const isRight = px > x2;
+      const isTop = py < y1;
+      const isBottom = py > y2;
+
+      // Calculate distances based on region
+      if (isLeft && isTop) {
+        return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2); // Top-left corner
+      } else if (isRight && isTop) {
+        return Math.sqrt((px - x2) ** 2 + (py - y1) ** 2); // Top-right corner
+      } else if (isLeft && isBottom) {
+        return Math.sqrt((px - x1) ** 2 + (py - y2) ** 2); // Bottom-left corner
+      } else if (isRight && isBottom) {
+        return Math.sqrt((px - x2) ** 2 + (py - y2) ** 2); // Bottom-right corner
+      } else if (isLeft) {
+        return Math.abs(px - x1); // Left side
+      } else if (isRight) {
+        return Math.abs(px - x2); // Right side
+      } else if (isTop) {
+        return Math.abs(py - y1); // Top side
+      } else {
+        return Math.abs(py - y2); // Bottom side
+      }
+    }
+
+
+    const getBestTarget = function (pos, nodes, expand) {
+      let closestNode = null;
+      let minDistance = Infinity;
+
+
+      nodes.forEach(function (node) {
+        var nodeBounds = getBounds(node, options.boundingBoxOptions);
+
+        if (expand) nodeBounds = expandBounds(nodeBounds, options.outThreshold);
+
+        const distance = minDistanceToPoint(pos, nodeBounds);
+
+        if (distance < minDistance) {
+          closestNode = node;
+          minDistance = distance;
+        }
       });
 
-      if (overlappingNodes.length > 0) {
-        // potential parent
-        var overlappingParents = overlappingNodes.filter(isParent);
+      return {
+        node: closestNode,
+        distance: minDistance
+      }
+    };
 
-        var _parent, _sibling;
+    var bestIn = getBestTarget(cursor, possibleInTargets, false);
+    
+    var bestBeside = getBestTarget(cursor, possibleBesidesTargets, true);
 
-        if (overlappingParents.length > 0) {
-          _sibling = cy.collection();
-          _parent = overlappingParents[0]; // TODO maybe use a metric here to select which one
-        } else {
-          _sibling = overlappingNodes[0]; // TODO maybe use a metric here to select which one
+    if (bestIn.distance == Infinity && bestBeside.distance == Infinity) {
+        return;
+    }
 
-          _parent = cy.add(options.newParentNode(_this.grabbedNode, _sibling));
+    if (bestIn.distance < Infinity && bestIn.distance < bestBeside.distance) {
+
+        _sibling = cy.collection();
+        _parent = bestIn.node;
+
+
+        _parent.addClass('cdnd-new-parent');
+
+        setParent(_this.grabbedNode, _parent);
+
+    }
+
+    if (bestBeside.distance < Infinity && bestBeside.distance < bestIn.distance) {
+
+      //  Let's create a parent for both dragged & Beside
+      _sibling = bestBeside.node;
+
+
+      _parent = _sibling.parent();
+
+      if (_parent.empty()) {
+
+
+        var newLocal;
+
+        var desiredId = _this.grabbedNode.data('id') + "+" + _sibling.data('id');
+        var uniqueId = desiredId;
+        var counter = 0;
+
+        // Check if the desired ID already exists
+        while (cy.getElementById(uniqueId).nonempty()) {
+            counter++;
+            uniqueId = desiredId + "(" + counter + ")"; // Append a number to create a unique ID
         }
 
-        _parent.addClass('cdnd-drop-target');
+        var newLocal = {
+            group: 'nodes',
+            data: {
+              id: uniqueId,
+            },
+            classes: ['cdnd-fake-parent', 'cdnd-new-parent', 'cdnd-auto-parent']
+        };
 
-        if (_parent !== _sibling) {
-          _parent.addClass('cdnd-new-parent');
-        }
-
-        _sibling.addClass('cdnd-drop-sibling');
+        _parent = cy.add(newLocal);
 
         setParent(_sibling, _parent);
-        _this.dropTargetBounds = getBoundsCopy(_parent, options.boundingBoxOptions);
-        setParent(_this.grabbedNode, _parent);
-        _this.dropTarget = _parent;
-        _this.dropSibling = _sibling;
-
-        _this.grabbedNode.emit('cdndover', [_parent, _sibling]);
       }
+      
+      setParent(_this.grabbedNode, _parent);
+      
+      _sibling.addClass('cdnd-drop-sibling');
+    }
+
+    _parent.addClass('cdnd-drop-target');
+
+    _this.dropTarget = _parent;
+    _this.dropSibling = _sibling;
+
+    if (presentNewSibling?.data('id') != _sibling?.data('id')) {                                                       
+      presentNewSibling = _sibling;
+    }
+
+
+    if (presentNewParent?.data('id') != _parent?.data('id')) {
+      if (presentNewParent != null && presentNewParent.hasClass('cdnd-fake-parent')) {
+
+        selected = cy.$('.cdnd-fake-parent');
+        //            presentNewParent.remove();
+        selected.children().move({ parent: (selected.parent().id() ? selected.parent().id() : null) });
+        selected.remove();
+      }
+      presentNewParent = _parent;
     }
   });
+
   this.addListener('free', 'node', function () {
     if (!_this.inGesture || !_this.enabled) {
       return;
     }
 
+
+    cy.nodes('.cdnd-auto-parent').filter(function (node) {
+      const children = node.children();
+      if (children.length === 1) {
+         // Move the single descendant to the root
+         children.first().move({ parent: null });
+      }
+      return children.length <= 1;
+    }).remove();
+
+    cy.nodes().removeClass('cdnd-fake-parent');
+    cy.nodes().removeClass('cdnd-drop-sibling');
+    cy.nodes().removeClass('cdnd-grabbed-node'); 
     var grabbedNode = _this.grabbedNode,
         dropTarget = _this.dropTarget,
         dropSibling = _this.dropSibling;
@@ -398,10 +577,12 @@ var getBounds = function getBounds(n, boundingBoxOptions) {
   return n.boundingBox(boundingBoxOptions);
 };
 
-var getBoundsTuple = function getBoundsTuple(n, boundingBoxOptions) {
+var getBoundsTuple = function getBoundsTuple(n, boundingBoxOptions, overThreshold) {
+  const originalBb = getBounds(n, boundingBoxOptions);                                                     
   return {
     node: n,
-    bb: copyBounds(getBounds(n, boundingBoxOptions))
+     bb: copyBounds(originalBb),
+     bbb: copyBounds(expandBounds(originalBb, overThreshold))
   };
 };
 
