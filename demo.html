@@ -3,7 +3,7 @@
 <html>
 
   <head>
-    <title>cytoscape-compound-drag-and-drop demo</title>
+    <title>LabIg cytoscape-compound-drag-and-drop demo</title>
 
     <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1">
 
@@ -73,9 +73,19 @@
 
             {
               selector: 'edge',
-              style: {
+              style: { 
+                 'line-color': 'pink',
                 'curve-style': 'bezier',
                 'target-arrow-shape': 'triangle'
+              }
+            },
+
+            {
+              selector: '.crossedEdge',
+              style: {
+                'line-color': 'green',
+                'border-style': 'dotted',
+                'width': 10,
               }
             },
 
@@ -107,11 +117,14 @@
                 'border-color': 'blue',
                 'border-style': 'dotted'
               }
-            }
+            },
           ],
 
           elements: {
             nodes: [
+              { data: { id: 'p1' } },
+              { data: { id: 'p2' } },
+              { data: { id: 'q' } },
               { data: { id: 'a' } },
               { data: { id: 'a1', parent: 'a' } },
               { data: { id: 'a2', parent: 'a' } },
@@ -124,18 +137,10 @@
               { data: { id: 'p'} }
             ],
             edges: [
-            
-               {
-                 data: { id: 'ab', source: 'a', target: 'b' }
-               },
-               
-               {
-               data: { id: 'a31c', source: 'a31', target: 'c' }
-               },
-               
-               {
-               data: { id: 'a32a31', source: 'a32', target: 'a31' }
-               },
+               { data: { id: 'p1p2', source: 'p1', target: 'p2' } },
+               { data: { id: 'ab', source: 'a', target: 'b' } },               
+               { data: { id: 'a31c', source: 'a31', target: 'c' } },               
+               { data: { id: 'a32a31', source: 'a32', target: 'a31' }},
 
             ]
           }

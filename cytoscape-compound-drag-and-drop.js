@@ -217,6 +217,7 @@ var addListeners = function addListeners() {
 
     _this.dropTarget.addClass('cdnd-drop-target');
 
+    console.log("emit('cdndgrab');");
     node.emit('cdndgrab');
   });
   this.addListener('add', 'node', function (e) {
@@ -318,6 +319,7 @@ var addListeners = function addListeners() {
             updateBoundsTuples();
           }
 
+          console.log("emit('cdndout', [" + parent.data('id') + ", " + sibling.data('id') +"]);");
           _this.grabbedNode.emit('cdndout', [parent, sibling]);
 
         }
@@ -339,6 +341,82 @@ var addListeners = function addListeners() {
         return t.node;
     });
 
+
+
+
+    //    console.log("findCrossingEdges(draggedNode)"); 
+
+    // Filter edges based on their intersection with the bounding box
+    crossingEdges= cy.edges().filter(function (edge) {
+      const edgeStart = edge.source().position();
+      const edgeEnd = edge.target().position();
+
+      // Check if any line segment of the edge intersects the bounding box
+      return isPointCloseToSegment(edgeStart, edgeEnd,cursor, 20); 
+    });
+
+
+    console.log("crossingEdges=" + (crossingEdges.length > 0 ? crossingEdges.first().data('id') + " (" + crossingEdges.length + ")" : "-" ));
+
+
+    cy.edges().removeClass("crossedEdge");
+    crossingEdges.addClass("crossedEdge");
+    
+
+    
+
+    function isPointCloseToSegment(p1, p2, q, dist) {
+ 
+
+      // Calculate distance from p1 to p2
+      let distP1P2 = distance(p1, p2);
+
+      // Check distance from q to p1
+      let distQp1 = distance(q, p1);
+      if (distQp1 > distP1P2) {
+        return false;
+      }
+
+      // Check distance from q to p2
+      let distQp2 = distance(q, p2);
+      if (distQp2 > distP1P2) {
+        return false;
+      } 
+
+      // Check if the perpendicular distance is within the given distance
+      return pointToLineDistance(p1, p2, q) <= dist;
+    }
+
+    // Function to calculate the Euclidean distance between two points
+    function distance(p, q) {
+      return Math.sqrt((p.x - q.x) ** 2 + (p.y - q.y) ** 2);
+    }
+
+    // Function to calculate the perpendicular distance from q to the line segment p1-p2
+    function pointToLineDistance(p1, p2, q) {
+      let dx = p2.x - p1.x;
+      let dy = p2.y - p1.y;
+
+      // Handle the case when p1 and p2 are the same point
+      if (dx === 0 && dy === 0) {
+        return distance(p1, q);
+      }
+
+      // Compute the projection factor of q onto the line segment
+      let t = ((q.x - p1.x) * dx + (q.y - p1.y) * dy) / (dx * dx + dy * dy);
+      t = Math.max(0, Math.min(1, t)); // Clamp t to the segment
+
+      // Find the closest point on the line segment to q
+      let closestX = p1.x + t * dx;
+      let closestY = p1.y + t * dy;
+
+      // Calculate the distance from q to the closest point
+      let closestPoint = { x: closestX, y: closestY };
+      return distance(q, closestPoint);
+    }
+
+
+    //--------------------------------------------
 
     var possibleBesidesTargets = _this.boundsTuples.filter(cursorBesidesTuple).map(function (t) {
         return t.node;
@@ -512,6 +590,9 @@ var addListeners = function addListeners() {
         dropTarget = _this.dropTarget,
         dropSibling = _this.dropSibling;
     reset();
+
+
+    console.log("emit('cdnddrop', [" + dropTarget.data('id') + ", " + dropSibling.data('id') + "]);");
     grabbedNode.emit('cdnddrop', [dropTarget, dropSibling]);
   });
 };
