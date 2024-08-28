@@ -217,7 +217,6 @@ var addListeners = function addListeners() {
 
     _this.dropTarget.addClass('cdnd-drop-target');
 
-    console.log("emit('cdndgrab');");
     node.emit('cdndgrab');
   });
   this.addListener('add', 'node', function (e) {
@@ -319,7 +318,6 @@ var addListeners = function addListeners() {
             updateBoundsTuples();
           }
 
-          console.log("emit('cdndout', [" + parent.data('id') + ", " + sibling.data('id') +"]);");
           _this.grabbedNode.emit('cdndout', [parent, sibling]);
 
         }
@@ -340,11 +338,7 @@ var addListeners = function addListeners() {
     var possibleInTargets = _this.boundsTuples.filter(cursorInTuple).map(function (t) {
         return t.node;
     });
-
-
-
-
-    //    console.log("findCrossingEdges(draggedNode)"); 
+     
 
     // Filter edges based on their intersection with the bounding box
     crossingEdges= cy.edges().filter(function (edge) {
@@ -353,17 +347,13 @@ var addListeners = function addListeners() {
 
       // Check if any line segment of the edge intersects the bounding box
       return isPointCloseToSegment(edgeStart, edgeEnd,cursor, 20); 
-    });
-
-
-    console.log("crossingEdges=" + (crossingEdges.length > 0 ? crossingEdges.first().data('id') + " (" + crossingEdges.length + ")" : "-" ));
-
+    }); 
 
     cy.edges().removeClass("crossedEdge");
     crossingEdges.addClass("crossedEdge");
     
-
-    
+    if (crossingEdges.length > 0)
+      return;
 
     function isPointCloseToSegment(p1, p2, q, dist) {
  
@@ -373,12 +363,24 @@ var addListeners = function addListeners() {
 
       // Check distance from q to p1
       let distQp1 = distance(q, p1);
+
+      if (distQp1 <= dist) {
+        //too close to node
+        return false;
+      } 
+
       if (distQp1 > distP1P2) {
         return false;
       }
 
       // Check distance from q to p2
       let distQp2 = distance(q, p2);
+
+      if (distQp2 <= dist) {
+        //too close to node
+        return false;
+      } 
+
       if (distQp2 > distP1P2) {
         return false;
       } 
@@ -514,29 +516,16 @@ var addListeners = function addListeners() {
       _parent = _sibling.parent();
 
       if (_parent.empty()) {
-
-
-        var newLocal;
-
-        var desiredId = _this.grabbedNode.data('id') + "+" + _sibling.data('id');
-        var uniqueId = desiredId;
-        var counter = 0;
-
-        // Check if the desired ID already exists
-        while (cy.getElementById(uniqueId).nonempty()) {
-            counter++;
-            uniqueId = desiredId + "(" + counter + ")"; // Append a number to create a unique ID
-        }
-
-        var newLocal = {
+        
+        var newParent = {
             group: 'nodes',
             data: {
-              id: uniqueId,
+              id: getUniqueId(_this.grabbedNode.id() + "+" + _sibling.id()),
             },
             classes: ['cdnd-fake-parent', 'cdnd-new-parent', 'cdnd-auto-parent']
         };
 
-        _parent = cy.add(newLocal);
+        _parent = cy.add(newParent);
 
         setParent(_sibling, _parent);
       }
@@ -551,12 +540,12 @@ var addListeners = function addListeners() {
     _this.dropTarget = _parent;
     _this.dropSibling = _sibling;
 
-    if (presentNewSibling?.data('id') != _sibling?.data('id')) {                                                       
+    if (presentNewSibling?.id() != _sibling?.id()) {                                                       
       presentNewSibling = _sibling;
     }
 
 
-    if (presentNewParent?.data('id') != _parent?.data('id')) {
+    if (presentNewParent?.id() != _parent?.id()) {
       if (presentNewParent != null && presentNewParent.hasClass('cdnd-fake-parent')) {
 
         selected = cy.$('.cdnd-fake-parent');
@@ -568,12 +557,49 @@ var addListeners = function addListeners() {
     }
   });
 
+  // Returns an ID that did not exist
+  function getUniqueId(desiredId) {
+
+    var uniqueId = desiredId;
+    var counter = 0;
+
+    while (cy.getElementById(uniqueId).nonempty()) {
+      counter++;
+      uniqueId = desiredId + "_" + counter; // Append a number to create a unique ID
+    }
+    return uniqueId;
+  }
+
   this.addListener('free', 'node', function () {
     if (!_this.inGesture || !_this.enabled) {
       return;
     }
 
 
+    cy.edges('.crossedEdge').forEach(function (edge) {
+
+      cy.add({
+        group: 'edges',
+        data: {
+          id: getUniqueId(edge.source().id() + _this.grabbedNode.id()),
+          source: edge.source().id(),
+          target: _this.grabbedNode.id()
+        }
+      });
+
+      cy.add({
+        group: 'edges',
+        data: {
+          id: getUniqueId(_this.grabbedNode.id() + edge.target().id()),
+          source: _this.grabbedNode.id(),
+          target: edge.target().id()
+        }
+      });
+
+      edge.remove(); 
+    });
+     
+     
     cy.nodes('.cdnd-auto-parent').filter(function (node) {
       const children = node.children();
       if (children.length === 1) {
@@ -591,8 +617,6 @@ var addListeners = function addListeners() {
         dropSibling = _this.dropSibling;
     reset();
 
-
-    console.log("emit('cdnddrop', [" + dropTarget.data('id') + ", " + dropSibling.data('id') + "]);");
     grabbedNode.emit('cdnddrop', [dropTarget, dropSibling]);
   });
 };
